@@ -5,7 +5,7 @@
 # BasisSetVentures/claude-plugins repo, then runs the private setup script.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/BasisSetVentures/bsv-skills-setup/main/bootstrap.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/BasisSetVentures/bsv-skills-setup/main/bootstrap.sh | bash -s -- --yes
 #
 # Environment variables:
 #   BSV_SETUP_REPO   Override source repo (default: BasisSetVentures/claude-plugins)
@@ -18,12 +18,105 @@ REF="${BSV_PLUGINS_REF:-main}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
 info()  { echo -e "${BLUE}[INFO]${NC} $*"; }
 ok()    { echo -e "${GREEN}[ OK ]${NC} $*"; }
+warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 fail()  { echo -e "${RED}[FAIL]${NC} $*"; }
+
+AUTO_YES=false
+for arg in "$@"; do
+    case "$arg" in
+        --yes|-y) AUTO_YES=true ;;
+    esac
+done
+
+confirm() {
+    local prompt="$1"
+    if [ "$AUTO_YES" = true ]; then
+        info "$prompt [auto-yes]"
+        return 0
+    fi
+    local answer=""
+    if [ -e /dev/tty ]; then
+        if { echo -en "${YELLOW}$prompt [y/N]${NC} " > /dev/tty; } 2>/dev/null && { read -r answer < /dev/tty; } 2>/dev/null; then
+            [[ "$answer" =~ ^[Yy] ]]
+        else
+            return 1
+        fi
+    else
+        return 1
+    fi
+}
+
+command_exists() {
+    command -v "$1" &>/dev/null
+}
+
+is_macos() {
+    [ "$(uname -s 2>/dev/null || echo "")" = "Darwin" ]
+}
+
+install_homebrew_if_needed() {
+    command_exists brew && return 0
+    is_macos || return 1
+
+    if confirm "Homebrew is missing. Install Homebrew?"; then
+        info "Installing Homebrew..."
+        if /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; then
+            if [ -x /opt/homebrew/bin/brew ]; then
+                eval "$(/opt/homebrew/bin/brew shellenv)"
+            elif [ -x /usr/local/bin/brew ]; then
+                eval "$(/usr/local/bin/brew shellenv)"
+            fi
+            command_exists brew && ok "Homebrew installed" && return 0
+        fi
+    fi
+    return 1
+}
+
+brew_install_tool() {
+    local tool="$1" package="$2"
+    command_exists "$tool" && return 0
+    command_exists brew || install_homebrew_if_needed || return 1
+
+    if confirm "Install $tool with Homebrew?"; then
+        info "Installing $tool..."
+        brew install "$package" && command_exists "$tool" && return 0
+    fi
+    return 1
+}
+
+install_claude_cli() {
+    command_exists claude && return 0
+    if confirm "Claude Code CLI is missing. Install it now?"; then
+        info "Installing Claude Code CLI..."
+        curl -fsSL https://claude.ai/install.sh | bash
+        hash -r 2>/dev/null || true
+        command_exists claude && return 0
+    fi
+    return 1
+}
+
+install_codex_cli() {
+    command_exists codex && return 0
+    if confirm "Codex CLI is missing. Install it now?"; then
+        if command_exists brew || install_homebrew_if_needed; then
+            info "Installing Codex CLI with Homebrew..."
+            brew install codex && command_exists codex && return 0
+        fi
+        if command_exists npm || brew_install_tool npm node; then
+            info "Installing Codex CLI with npm fallback..."
+            npm i -g @openai/codex
+            hash -r 2>/dev/null || true
+            command_exists codex && return 0
+        fi
+    fi
+    return 1
+}
 
 echo "========================================="
 echo "  BSV Skills Bootstrap"
@@ -33,29 +126,44 @@ echo ""
 
 # --- Prerequisites ---
 info "Checking prerequisites..."
+command_exists git || brew_install_tool git git || true
+command_exists gh || brew_install_tool gh gh || true
+command_exists python3 || brew_install_tool python3 python || true
+command_exists uv || brew_install_tool uv uv || true
+
 missing=()
-command -v gh &>/dev/null || missing+=("gh (brew install gh)")
-command -v python3 &>/dev/null || missing+=("python3 (brew install python)")
-command -v uv &>/dev/null || missing+=("uv (brew install uv)")
-command -v git &>/dev/null || missing+=("git")
+for tool in git gh python3 uv; do
+    command_exists "$tool" || missing+=("$tool")
+done
 
 if [ ${#missing[@]} -gt 0 ]; then
-    fail "Missing required tools:"
+    fail "Missing required tools after install attempts:"
     for tool in "${missing[@]}"; do echo "  - $tool"; done
     exit 1
 fi
-ok "Prerequisites installed"
+ok "Required prerequisites installed"
+
+if ! command_exists claude; then
+    install_claude_cli || warn "Claude Code CLI skipped or unavailable"
+fi
+if ! command_exists codex; then
+    install_codex_cli || warn "Codex CLI skipped or unavailable"
+fi
+if ! command_exists claude && ! command_exists codex; then
+    fail "Neither Claude Code CLI nor Codex CLI is available. Install at least one and rerun this command."
+    exit 1
+fi
 
 # --- GitHub Auth ---
 info "Checking GitHub authentication..."
-if ! gh auth status &>/dev/null; then
+if ! gh auth status -h github.com &>/dev/null; then
     echo ""
     echo "GitHub authentication required. Starting login..."
-    gh auth login
+    gh auth login --hostname github.com --git-protocol https --web --scopes repo
 fi
 
-if ! gh auth status &>/dev/null; then
-    fail "GitHub authentication failed. Run 'gh auth login' manually."
+if ! gh auth status -h github.com &>/dev/null; then
+    fail "GitHub authentication failed. Run: gh auth login --hostname github.com --git-protocol https --web --scopes repo"
     exit 1
 fi
 ok "GitHub authenticated"
@@ -63,8 +171,14 @@ ok "GitHub authenticated"
 # --- Repo Access ---
 info "Checking access to $REPO..."
 if ! gh api "repos/$REPO" --jq '.full_name' &>/dev/null; then
-    fail "Cannot access $REPO. Request access from admin."
-    exit 1
+    warn "Cannot access $REPO with current GitHub auth."
+    if confirm "Refresh GitHub auth with private repo scope?"; then
+        gh auth refresh -h github.com -s repo || true
+    fi
+    if ! gh api "repos/$REPO" --jq '.full_name' &>/dev/null; then
+        fail "Cannot access $REPO. Request access from admin or run: gh auth refresh -h github.com -s repo"
+        exit 1
+    fi
 fi
 ok "Repository access confirmed"
 
