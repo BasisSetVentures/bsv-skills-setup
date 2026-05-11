@@ -52,6 +52,28 @@ confirm() {
     fi
 }
 
+run_interactive() {
+    if [ -e /dev/tty ]; then
+        "$@" < /dev/tty
+    else
+        "$@"
+    fi
+}
+
+download_and_run_bash() {
+    local url="$1"
+    local tmp_file status
+    tmp_file=$(mktemp)
+    status=0
+    if curl -fsSL "$url" -o "$tmp_file"; then
+        run_interactive bash "$tmp_file" || status=$?
+    else
+        status=$?
+    fi
+    rm -f "$tmp_file"
+    return "$status"
+}
+
 command_exists() {
     command -v "$1" &>/dev/null
 }
@@ -66,7 +88,7 @@ install_homebrew_if_needed() {
 
     if confirm "Homebrew is missing. Install Homebrew?"; then
         info "Installing Homebrew..."
-        if /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; then
+        if download_and_run_bash "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"; then
             if [ -x /opt/homebrew/bin/brew ]; then
                 eval "$(/opt/homebrew/bin/brew shellenv)"
             elif [ -x /usr/local/bin/brew ]; then
@@ -85,7 +107,7 @@ brew_install_tool() {
 
     if confirm "Install $tool with Homebrew?"; then
         info "Installing $tool..."
-        brew install "$package" && command_exists "$tool" && return 0
+        run_interactive brew install "$package" && command_exists "$tool" && return 0
     fi
     return 1
 }
@@ -94,7 +116,7 @@ install_claude_cli() {
     command_exists claude && return 0
     if confirm "Claude Code CLI is missing. Install it now?"; then
         info "Installing Claude Code CLI..."
-        curl -fsSL https://claude.ai/install.sh | bash
+        download_and_run_bash "https://claude.ai/install.sh"
         hash -r 2>/dev/null || true
         command_exists claude && return 0
     fi
@@ -106,11 +128,11 @@ install_codex_cli() {
     if confirm "Codex CLI is missing. Install it now?"; then
         if command_exists brew || install_homebrew_if_needed; then
             info "Installing Codex CLI with Homebrew..."
-            brew install codex && command_exists codex && return 0
+            run_interactive brew install --cask codex && command_exists codex && return 0
         fi
         if command_exists npm || brew_install_tool npm node; then
             info "Installing Codex CLI with npm fallback..."
-            npm i -g @openai/codex
+            run_interactive npm i -g @openai/codex
             hash -r 2>/dev/null || true
             command_exists codex && return 0
         fi
@@ -159,7 +181,7 @@ info "Checking GitHub authentication..."
 if ! gh auth status -h github.com &>/dev/null; then
     echo ""
     echo "GitHub authentication required. Starting login..."
-    gh auth login --hostname github.com --git-protocol https --web --scopes repo
+    run_interactive gh auth login --hostname github.com --git-protocol https --web --scopes repo
 fi
 
 if ! gh auth status -h github.com &>/dev/null; then
@@ -173,7 +195,7 @@ info "Checking access to $REPO..."
 if ! gh api "repos/$REPO" --jq '.full_name' &>/dev/null; then
     warn "Cannot access $REPO with current GitHub auth."
     if confirm "Refresh GitHub auth with private repo scope?"; then
-        gh auth refresh -h github.com -s repo || true
+        run_interactive gh auth refresh -h github.com -s repo || true
     fi
     if ! gh api "repos/$REPO" --jq '.full_name' &>/dev/null; then
         fail "Cannot access $REPO. Request access from admin or run: gh auth refresh -h github.com -s repo"

@@ -31,7 +31,7 @@ The bootstrap tries to install missing supported tools before stopping. On macOS
 - `python3`
 - `uv`
 - Claude Code CLI using `curl -fsSL https://claude.ai/install.sh | bash`
-- Codex CLI using `brew install codex`, with `npm i -g @openai/codex` fallback
+- Codex CLI using `brew install --cask codex`, with `npm i -g @openai/codex` fallback
 
 If GitHub auth is missing, the script launches:
 
