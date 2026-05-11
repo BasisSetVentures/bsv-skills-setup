@@ -7,7 +7,7 @@ This repository intentionally contains no secrets. The bootstrap script authenti
 ## Run
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/BasisSetVentures/bsv-skills-setup/main/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/BasisSetVentures/bsv-skills-setup/main/bootstrap.sh | bash -s -- --yes
 ```
 
 Pass setup flags through `bash -s --`:
@@ -15,22 +15,31 @@ Pass setup flags through `bash -s --`:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/BasisSetVentures/bsv-skills-setup/main/bootstrap.sh | bash -s -- --status
 curl -fsSL https://raw.githubusercontent.com/BasisSetVentures/bsv-skills-setup/main/bootstrap.sh | bash -s -- --yes
+curl -fsSL https://raw.githubusercontent.com/BasisSetVentures/bsv-skills-setup/main/bootstrap.sh | bash -s -- --yes --include-plugin pascal-linear
 ```
 
 ## Requirements
 
+- Claude Code CLI or Codex CLI
+- GitHub access to `BasisSetVentures/claude-plugins`
+
+The bootstrap tries to install missing supported tools before stopping. On macOS it can install:
+
+- Homebrew
 - `gh`
 - `git`
 - `python3`
 - `uv`
-- GitHub access to `BasisSetVentures/claude-plugins`
+- Claude Code CLI using `curl -fsSL https://claude.ai/install.sh | bash`
+- Codex CLI using `brew install --cask codex`, with `npm i -g @openai/codex` fallback
 
-On macOS:
+If GitHub auth is missing, the script launches:
 
 ```bash
-brew install gh git python uv
-gh auth login
+gh auth login --hostname github.com --git-protocol https --web --scopes repo
 ```
+
+If one of Claude Code CLI or Codex CLI is missing and you decline installation, setup continues for the available client. If neither client is available, setup stops incomplete.
 
 ## Optional Overrides
 
@@ -43,7 +52,7 @@ Use `BSV_PLUGINS_REF` to test a branch, tag, or SHA before it is merged:
 
 ```bash
 export BSV_PLUGINS_REF=my-branch
-curl -fsSL https://raw.githubusercontent.com/BasisSetVentures/bsv-skills-setup/main/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/BasisSetVentures/bsv-skills-setup/main/bootstrap.sh | bash -s -- --yes
 ```
 
 ## Security
