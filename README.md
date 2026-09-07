@@ -21,7 +21,8 @@ curl -fsSL https://raw.githubusercontent.com/BasisSetVentures/bsv-skills-setup/m
 After plugin installation, run `pascal login`. With `--include-plugin pascal-linear`,
 setup also prints optional Linear Personal API key instructions.
 The downloaded setup also removes retired BSV laptop hooks and credentials on
-every run, including `--status`, while preserving unrelated hooks and settings.
+normal setup and repair runs, while preserving unrelated hooks and settings.
+`--status` only reports pending cleanup and does not change local configuration.
 
 ## Requirements
 
