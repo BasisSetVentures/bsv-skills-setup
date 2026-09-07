@@ -18,6 +18,12 @@ curl -fsSL https://raw.githubusercontent.com/BasisSetVentures/bsv-skills-setup/m
 curl -fsSL https://raw.githubusercontent.com/BasisSetVentures/bsv-skills-setup/main/bootstrap.sh | bash -s -- --yes --include-plugin pascal-linear
 ```
 
+After plugin installation, run `pascal login`. With `--include-plugin pascal-linear`,
+setup also prints optional Linear Personal API key instructions.
+The downloaded setup also removes retired BSV laptop hooks and credentials on
+normal setup and repair runs, while preserving unrelated hooks and settings.
+`--status` only reports pending cleanup and does not change local configuration.
+
 ## Requirements
 
 - Claude Code CLI or Codex CLI
@@ -29,7 +35,6 @@ The bootstrap tries to install missing supported tools before stopping. On macOS
 - `gh`
 - `git`
 - `python3`
-- `uv`
 - Claude Code CLI using `curl -fsSL https://claude.ai/install.sh | bash`
 - Codex CLI using `brew install --cask codex`, with `npm i -g @openai/codex` fallback
 
@@ -39,7 +44,7 @@ If GitHub auth is missing, the script launches:
 gh auth login --hostname github.com --git-protocol https --web --scopes repo
 ```
 
-If one of Claude Code CLI or Codex CLI is missing and you decline installation, setup continues for the available client. If neither client is available, setup stops incomplete.
+If one of Claude Code CLI or Codex CLI is missing and you decline installation, setup continues for the available client. If neither client is available, setup stops with an error.
 
 ## Optional Overrides
 
