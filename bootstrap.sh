@@ -151,10 +151,9 @@ info "Checking prerequisites..."
 command_exists git || brew_install_tool git git || true
 command_exists gh || brew_install_tool gh gh || true
 command_exists python3 || brew_install_tool python3 python || true
-command_exists uv || brew_install_tool uv uv || true
 
 missing=()
-for tool in git gh python3 uv; do
+for tool in git gh python3; do
     command_exists "$tool" || missing+=("$tool")
 done
 
@@ -166,10 +165,10 @@ fi
 ok "Required prerequisites installed"
 
 if ! command_exists claude; then
-    install_claude_cli || warn "Claude Code CLI skipped or unavailable"
+    install_claude_cli || info "Claude Code CLI skipped or unavailable"
 fi
 if ! command_exists codex; then
-    install_codex_cli || warn "Codex CLI skipped or unavailable"
+    install_codex_cli || info "Codex CLI skipped or unavailable"
 fi
 if ! command_exists claude && ! command_exists codex; then
     fail "Neither Claude Code CLI nor Codex CLI is available. Install at least one and rerun this command."
